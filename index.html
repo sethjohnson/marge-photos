@@ -236,6 +236,109 @@
       color: var(--muted);
     }
 
+    details.gphotos-box {
+      margin-block-start: 0.85rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface-soft);
+      padding: 0.7rem 0.9rem;
+    }
+
+    details.gphotos-box summary {
+      font-weight: 600;
+      font-size: 0.94rem;
+      color: var(--accent-hover);
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-block-size: 36px;
+    }
+
+    details.gphotos-box summary::-webkit-details-marker { display: none; }
+
+    details.gphotos-box summary::after {
+      content: '+';
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    details.gphotos-box[open] summary::after {
+      content: '−';
+    }
+
+    .gphotos-body {
+      margin-block-start: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+    }
+
+    .gphotos-link-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 0.5rem;
+      align-items: stretch;
+    }
+
+    .gphotos-link-row input[type="url"] {
+      width: 100%;
+      font: inherit;
+      font-size: max(1rem, 1em);
+      color: var(--text);
+      background: var(--surface);
+      border: 1.5px solid var(--border-strong);
+      border-radius: 10px;
+      padding: 0.65rem 0.8rem;
+      min-block-size: 48px;
+    }
+
+    .gphotos-btn {
+      min-block-size: 48px;
+      border: 1.5px solid var(--accent);
+      border-radius: 10px;
+      background: var(--surface);
+      color: var(--accent-hover);
+      font: inherit;
+      font-size: 0.94rem;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0.6rem 0.95rem;
+      white-space: nowrap;
+    }
+
+    .gphotos-btn:hover:not(:disabled) {
+      background: var(--accent-soft);
+    }
+
+    .gphotos-btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .gphotos-picker-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-block-size: 48px;
+      padding: 0.65rem 1rem;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #ffffff;
+      text-decoration: none;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .gphotos-divider {
+      text-align: center;
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-block: 0.1rem;
+    }
+
     .file-list {
       list-style: none;
       margin: 0.85rem 0 0;
@@ -517,6 +620,33 @@
             accept="image/*"
             multiple
             class="visually-hidden">
+
+          <details class="gphotos-box" id="gphotosBox">
+            <summary>Import from Google Photos</summary>
+            <div class="gphotos-body">
+              <div id="gphotosPickerWrap" hidden>
+                <button type="button" id="gphotosPickerBtn" class="gphotos-btn" style="width:100%;">Sign in &amp; Pick from Google Photos</button>
+                <a id="gphotosPickerOpenLink" class="gphotos-picker-action" href="#" target="_blank" rel="noopener noreferrer" hidden>Open Google Photos Picker →</a>
+                <p id="gphotosPickerStatus" class="hint" hidden></p>
+                <div class="gphotos-divider">or paste a shared link (no sign-in)</div>
+              </div>
+
+              <div class="gphotos-link-row">
+                <input
+                  type="url"
+                  id="gphotosLinkInput"
+                  placeholder="https://photos.app.goo.gl/..."
+                  aria-label="Google Photos shared link"
+                  autocomplete="off"
+                  autocorrect="off"
+                  autocapitalize="none"
+                  spellcheck="false">
+                <button type="button" id="gphotosImportBtn" class="gphotos-btn">Import</button>
+              </div>
+              <p class="hint">In Google Photos, select photos → Share → Create link, then paste it here.</p>
+            </div>
+          </details>
+
           <ul id="fileList" class="file-list" aria-label="Selected photos" hidden></ul>
         </div>
 
@@ -545,6 +675,7 @@
       var EXEC_URL = "https://script.google.com/macros/s/AKfycbxseZvhbdF8cPl3ORVqIBz91zdQAOlRXivlxtdiA4w3GHxhKF5WJ43PVuZxne2i_tDP/exec";
       var TOKEN = ((new URLSearchParams(window.location.search)).get("t") || "z4lrFiIu8HLYV8FM6GRF2Q");
       var MAX_BYTES = 20 * 1024 * 1024;
+      var GOOGLE_PHOTOS_CLIENT_ID = "";
 
       var form = document.getElementById('uploadForm');
       var nameInput = document.getElementById('uploaderName');
@@ -594,6 +725,16 @@
       var progressEl = document.getElementById('uploadProgress');
       var progressText = document.getElementById('progressText');
       var progressPct = document.getElementById('progressPct');
+      var gphotosLinkInput = document.getElementById('gphotosLinkInput');
+      var gphotosImportBtn = document.getElementById('gphotosImportBtn');
+      var gphotosPickerWrap = document.getElementById('gphotosPickerWrap');
+      var gphotosPickerBtn = document.getElementById('gphotosPickerBtn');
+      var gphotosPickerOpenLink = document.getElementById('gphotosPickerOpenLink');
+      var gphotosPickerStatus = document.getElementById('gphotosPickerStatus');
+
+      if (GOOGLE_PHOTOS_CLIENT_ID) {
+        gphotosPickerWrap.hidden = false;
+      }
 
       var queue = [];
       var isUploading = false;
@@ -1052,10 +1193,298 @@
         moreBtn.hidden = true;
         submitBtn.hidden = false;
         submitBtn.textContent = 'Send Photos';
+        gphotosLinkInput.value = '';
         clearAlert();
         renderQueue();
         pickerBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
+
+      function requireUploaderName() {
+        var uploaderName = nameInput.value.trim();
+        if (!uploaderName) {
+          nameInput.setAttribute('aria-invalid', 'true');
+          showAlert('Please enter your name first.');
+          nameInput.focus();
+          return '';
+        }
+        nameInput.removeAttribute('aria-invalid');
+        try { localStorage.setItem('marge_uploader_name', uploaderName); } catch (e) {}
+        return uploaderName;
+      }
+
+      // Google Photos shared-link import (zero login)
+      gphotosImportBtn.addEventListener('click', async function() {
+        if (isUploading) return;
+        clearAlert();
+        successBox.hidden = true;
+
+        var uploaderName = requireUploaderName();
+        if (!uploaderName) return;
+
+        var link = gphotosLinkInput.value.trim();
+        if (!/^https:\/\/(photos\.app\.goo\.gl\/|photos\.google\.com\/share\/)/.test(link)) {
+          showAlert('Paste a Google Photos link starting with https://photos.app.goo.gl/ or https://photos.google.com/share/.');
+          gphotosLinkInput.focus();
+          return;
+        }
+
+        var caption = document.getElementById('caption').value.trim();
+        var website = document.getElementById('website').value;
+
+        isUploading = true;
+        gphotosImportBtn.disabled = true;
+        submitBtn.disabled = true;
+        progressBox.hidden = false;
+        progressEl.removeAttribute('value');
+        progressText.textContent = 'Checking Google Photos link...';
+        progressPct.textContent = '';
+
+        try {
+          var resolved = await postUploadPayload({
+            action: 'resolve_gphotos_link',
+            token: TOKEN,
+            website: website,
+            uploaderName: uploaderName,
+            url: link
+          });
+
+          if (!resolved || !resolved.ok || !resolved.items || resolved.items.length === 0) {
+            showAlert((resolved && resolved.error) ? resolved.error : 'Could not read photos from that Google Photos link.');
+            progressBox.hidden = true;
+            return;
+          }
+
+          var items = resolved.items;
+          progressEl.max = items.length;
+          progressEl.value = 0;
+          progressPct.textContent = '0%';
+
+          var imported = 0;
+          var failed = 0;
+
+          for (var i = 0; i < items.length; i++) {
+            var num = i + 1;
+            progressText.textContent = 'Importing ' + num + ' of ' + items.length + ' from Google Photos...';
+            try {
+              var imp = await postUploadPayload({
+                action: 'import_gphotos_item',
+                token: TOKEN,
+                website: website,
+                uploaderName: uploaderName,
+                caption: caption,
+                baseUrl: items[i].baseUrl,
+                index: items[i].index
+              });
+              if (imp && imp.ok) imported++;
+              else failed++;
+            } catch (err) {
+              failed++;
+            }
+            progressEl.value = num;
+            progressPct.textContent = Math.round((num / items.length) * 100) + '%';
+          }
+
+          if (imported > 0) {
+            gphotosLinkInput.value = '';
+            progressText.textContent = 'Imported ' + imported + ' photo' + (imported === 1 ? '' : 's') + '.';
+            successBox.textContent = 'Thanks, ' + uploaderName + '! Imported ' + imported + ' photo' + (imported === 1 ? '' : 's') + ' from Google Photos.' + (failed > 0 ? (' (' + failed + ' could not be imported.)') : '');
+            successBox.hidden = false;
+            submitBtn.hidden = true;
+            moreBtn.hidden = false;
+          } else {
+            showAlert('Could not import photos from that link. Try saving them to your device and using Choose Photos.');
+          }
+        } catch (err) {
+          showAlert('Connection error while reading Google Photos link. Try again or use Choose Photos.');
+          progressBox.hidden = true;
+        } finally {
+          isUploading = false;
+          gphotosImportBtn.disabled = false;
+          submitBtn.disabled = false;
+        }
+      });
+
+      // Official Google Photos Picker API (active when GOOGLE_PHOTOS_CLIENT_ID is set)
+      function loadGsiScript() {
+        return new Promise(function(resolve, reject) {
+          if (window.google && google.accounts && google.accounts.oauth2) return resolve();
+          var existing = document.querySelector('script[data-gsi="1"]');
+          if (existing) {
+            existing.addEventListener('load', resolve, { once: true });
+            existing.addEventListener('error', reject, { once: true });
+            return;
+          }
+          var s = document.createElement('script');
+          s.src = 'https://accounts.google.com/gsi/client';
+          s.async = true;
+          s.defer = true;
+          s.dataset.gsi = '1';
+          s.onload = resolve;
+          s.onerror = function() { reject(new Error('Could not load Google Sign-In.')); };
+          document.head.appendChild(s);
+        });
+      }
+
+      function requestPickerToken() {
+        return new Promise(function(resolve, reject) {
+          var client = google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_PHOTOS_CLIENT_ID,
+            scope: 'https://www.googleapis.com/auth/photospicker.mediaitems.readonly',
+            callback: function(resp) {
+              if (resp && resp.access_token) resolve(resp.access_token);
+              else reject(new Error((resp && resp.error_description) || 'Google sign-in cancelled.'));
+            },
+            error_callback: function(err) {
+              reject(new Error((err && err.message) || 'Google sign-in popup blocked or closed.'));
+            }
+          });
+          client.requestAccessToken();
+        });
+      }
+
+      if (gphotosPickerBtn) {
+        gphotosPickerBtn.addEventListener('click', async function() {
+          if (isUploading || !GOOGLE_PHOTOS_CLIENT_ID) return;
+          clearAlert();
+          successBox.hidden = true;
+
+          var uploaderName = requireUploaderName();
+          if (!uploaderName) return;
+
+          var caption = document.getElementById('caption').value.trim();
+          var website = document.getElementById('website').value;
+
+          gphotosPickerBtn.disabled = true;
+          gphotosPickerStatus.textContent = 'Opening Google Sign-In...';
+          gphotosPickerStatus.hidden = false;
+
+          var pickerToken = '';
+          var sessionId = '';
+          try {
+            await loadGsiScript();
+            pickerToken = await requestPickerToken();
+
+            gphotosPickerStatus.textContent = 'Starting Google Photos Picker...';
+            var sessRes = await fetch('https://photospicker.googleapis.com/v1/sessions', {
+              method: 'POST',
+              headers: {
+                Authorization: 'Bearer ' + pickerToken,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({})
+            });
+            var session = await sessRes.json();
+            if (!sessRes.ok || !session.id || !session.pickerUri) {
+              throw new Error((session && session.error && session.error.message) || 'Could not start Google Photos Picker.');
+            }
+            sessionId = session.id;
+
+            // Show explicit button so iOS Safari popup blockers never hide the picker
+            gphotosPickerOpenLink.href = session.pickerUri;
+            gphotosPickerOpenLink.hidden = false;
+            gphotosPickerStatus.textContent = 'Tap "Open Google Photos Picker", pick your photos, tap Done, then return here.';
+            try { window.open(session.pickerUri, '_blank', 'noopener'); } catch (e) {}
+
+            // Poll until user finishes selecting photos (up to 5 minutes)
+            var deadline = Date.now() + 5 * 60 * 1000;
+            var ready = false;
+            while (Date.now() < deadline) {
+              await new Promise(function(r) { setTimeout(r, 3000); });
+              var pollRes = await fetch('https://photospicker.googleapis.com/v1/sessions/' + encodeURIComponent(sessionId), {
+                headers: { Authorization: 'Bearer ' + pickerToken }
+              });
+              if (!pollRes.ok) continue;
+              var pollData = await pollRes.json();
+              if (pollData.mediaItemsSet) {
+                ready = true;
+                break;
+              }
+            }
+
+            gphotosPickerOpenLink.hidden = true;
+            if (!ready) {
+              throw new Error('Timed out waiting for Google Photos selection. Try again.');
+            }
+
+            // List picked items (photos only, skip videos)
+            var picked = [];
+            var pageToken = '';
+            do {
+              var listUrl = 'https://photospicker.googleapis.com/v1/mediaItems?sessionId=' + encodeURIComponent(sessionId) + '&pageSize=50' + (pageToken ? '&pageToken=' + encodeURIComponent(pageToken) : '');
+              var itemsRes = await fetch(listUrl, { headers: { Authorization: 'Bearer ' + pickerToken } });
+              var itemsData = await itemsRes.json();
+              var batch = (itemsData.mediaItems || []).filter(function(m) {
+                return m.type === 'PHOTO' && m.mediaFile && m.mediaFile.baseUrl;
+              });
+              picked = picked.concat(batch);
+              pageToken = itemsData.nextPageToken || '';
+            } while (pageToken && picked.length < 50);
+
+            if (picked.length === 0) {
+              gphotosPickerStatus.hidden = true;
+              showAlert('No photos were selected in Google Photos.');
+              return;
+            }
+
+            isUploading = true;
+            submitBtn.disabled = true;
+            gphotosPickerStatus.hidden = true;
+            progressBox.hidden = false;
+            progressEl.max = picked.length;
+            progressEl.value = 0;
+            progressPct.textContent = '0%';
+
+            var imported = 0;
+            var failed = 0;
+            for (var i = 0; i < picked.length; i++) {
+              var num = i + 1;
+              progressText.textContent = 'Importing ' + num + ' of ' + picked.length + ' from Google Photos...';
+              try {
+                var imp = await postUploadPayload({
+                  action: 'import_picker_item',
+                  token: TOKEN,
+                  website: website,
+                  uploaderName: uploaderName,
+                  caption: caption,
+                  baseUrl: picked[i].mediaFile.baseUrl,
+                  fileName: picked[i].mediaFile.filename || ('google_photos_' + num + '.jpg'),
+                  pickerAccessToken: pickerToken
+                });
+                if (imp && imp.ok) imported++;
+                else failed++;
+              } catch (e) {
+                failed++;
+              }
+              progressEl.value = num;
+              progressPct.textContent = Math.round((num / picked.length) * 100) + '%';
+            }
+
+            if (imported > 0) {
+              progressText.textContent = 'Imported ' + imported + ' photo' + (imported === 1 ? '' : 's') + '.';
+              successBox.textContent = 'Thanks, ' + uploaderName + '! Imported ' + imported + ' photo' + (imported === 1 ? '' : 's') + ' from Google Photos.' + (failed > 0 ? (' (' + failed + ' failed.)') : '');
+              successBox.hidden = false;
+              submitBtn.hidden = true;
+              moreBtn.hidden = false;
+            } else {
+              showAlert('Could not import the selected photos from Google Photos.');
+            }
+          } catch (err) {
+            gphotosPickerOpenLink.hidden = true;
+            gphotosPickerStatus.hidden = true;
+            showAlert(err && err.message ? err.message : 'Google Photos Picker failed.');
+          } finally {
+            isUploading = false;
+            submitBtn.disabled = false;
+            gphotosPickerBtn.disabled = false;
+            if (sessionId && pickerToken) {
+              fetch('https://photospicker.googleapis.com/v1/sessions/' + encodeURIComponent(sessionId), {
+                method: 'DELETE',
+                headers: { Authorization: 'Bearer ' + pickerToken }
+              }).catch(function() {});
+            }
+          }
+        });
+      }
 
       form.addEventListener('submit', async function(e) {
         e.preventDefault();
