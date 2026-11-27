@@ -499,7 +499,7 @@
           <div class="picker-box" id="pickerBox">
             <div class="picker-visual" aria-hidden="true">
               <span class="picker-title">Choose Photos</span>
-              <span class="picker-sub">Tap to pick photos, or long-press to paste (up to 20 MB each)</span>
+              <span class="picker-sub" id="pickerSub">Tap to pick photos, or long-press to paste (up to 20 MB each)</span>
             </div>
             <div
               id="pastePad"
@@ -550,10 +550,26 @@
       var nameInput = document.getElementById('uploaderName');
       var photoInput = document.getElementById('photoInput');
       var pickerBox = document.getElementById('pickerBox');
+      var pickerSub = document.getElementById('pickerSub');
       var pastePad = document.getElementById('pastePad');
       var pasteCounter = 0;
       var touchStartAt = 0;
       var suppressPickerUntil = 0;
+
+      (function updatePickerHint() {
+        var ua = navigator.userAgent || '';
+        var platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || ua;
+        var isCoarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+        var isMobileUa = /iPhone|iPad|iPod|Android/i.test(ua);
+        var maxLabel = Math.floor(MAX_BYTES / (1024 * 1024));
+        if (isCoarse || isMobileUa) {
+          pickerSub.textContent = 'Tap to pick photos, or long-press to paste (up to ' + maxLabel + ' MB each)';
+        } else if (/Mac/i.test(platform)) {
+          pickerSub.textContent = 'Click to pick photos, drop them here, or press ⌘V to paste (up to ' + maxLabel + ' MB each)';
+        } else {
+          pickerSub.textContent = 'Click to pick photos, drop them here, or press Ctrl+V to paste (up to ' + maxLabel + ' MB each)';
+        }
+      })();
 
       try {
         var savedName = localStorage.getItem('marge_uploader_name');
