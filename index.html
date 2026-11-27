@@ -577,8 +577,12 @@
       } catch (e) {}
 
       nameInput.addEventListener('input', function() {
-        if (nameInput.value.trim()) {
+        var val = nameInput.value.trim();
+        if (val) {
           nameInput.removeAttribute('aria-invalid');
+          try { localStorage.setItem('marge_uploader_name', val); } catch (e) {}
+        } else {
+          try { localStorage.removeItem('marge_uploader_name'); } catch (e) {}
         }
       });
       var fileListEl = document.getElementById('fileList');
