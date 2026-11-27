@@ -743,27 +743,27 @@
         if (cd.files && cd.files.length > 0) {
           for (var i = 0; i < cd.files.length; i++) {
             var f = cd.files[i];
-            if (f && (!f.type || (f.type.indexOf('image/') === 0 && f.type !== 'image/svg+xml'))) {
+            if (f && f.type !== 'image/svg+xml' && (!f.type || f.type === 'application/octet-stream' || f.type.indexOf('image/') === 0)) {
               pasteCounter++;
               var ext = extFromMime(f.type);
               var name = (f.name && f.name !== 'image.png' && f.name !== 'image.jpg') ? f.name : ('pasted-photo-' + pasteCounter + '.' + ext);
-              found.push(new File([f], name, { type: f.type || 'image/jpeg' }));
+              found.push(new File([f], name, { type: f.type || '' }));
             }
           }
           if (found.length > 0) return found;
         }
 
-        // 2. Fallback: clipboardData.items
+        // 2. Fallback: clipboardData.items (including blank/octet-stream MIME from iOS HEIC/JPEG)
         if (cd.items && cd.items.length > 0) {
           for (var j = 0; j < cd.items.length; j++) {
             var it = cd.items[j];
-            if (it.kind === 'file' && it.type && it.type.indexOf('image/') === 0 && it.type !== 'image/svg+xml') {
+            if (it.kind === 'file' && it.type !== 'image/svg+xml' && (!it.type || it.type === 'application/octet-stream' || it.type.indexOf('image/') === 0)) {
               var itemFile = it.getAsFile();
               if (itemFile) {
                 pasteCounter++;
-                var ext2 = extFromMime(itemFile.type);
+                var ext2 = extFromMime(itemFile.type || it.type);
                 var name2 = (itemFile.name && itemFile.name !== 'image.png' && itemFile.name !== 'image.jpg') ? itemFile.name : ('pasted-photo-' + pasteCounter + '.' + ext2);
-                found.push(new File([itemFile], name2, { type: itemFile.type }));
+                found.push(new File([itemFile], name2, { type: itemFile.type || it.type || '' }));
               }
             }
           }
@@ -787,11 +787,12 @@
         return found;
       }
 
-      async function harvestPastePadImages() {
-        var imgs = Array.prototype.slice.call(pastePad.querySelectorAll('img'));
-        var harvested = [];
-        for (var i = 0; i < imgs.length; i++) {
-          var src = imgs[i].getAttribute('src') || '';
+      function imgElementToFile(img) {
+        return new Promise(async function(resolve) {
+          var src = img.getAttribute('src') || img.src || '';
+          if (!src) return resolve(null);
+
+          // Path A: fetch blob: or data:image/ directly (preserves original bytes)
           if (src.indexOf('blob:') === 0 || src.indexOf('data:image/') === 0) {
             try {
               var res = await fetch(src);
@@ -799,19 +800,77 @@
               if (blob && blob.size > 0 && blob.type !== 'image/svg+xml') {
                 pasteCounter++;
                 var mime = (blob.type && blob.type.indexOf('image/') === 0) ? blob.type : 'image/jpeg';
-                var ext = extFromMime(mime);
-                harvested.push(new File([blob], 'pasted-photo-' + pasteCounter + '.' + ext, { type: mime }));
+                return resolve(new File([blob], 'pasted-photo-' + pasteCounter + '.' + extFromMime(mime), { type: mime }));
               }
             } catch (e) {}
           }
+
+          // Path B: canvas extraction for webkit-fake-url:// or other WebKit-inserted <img>
+          function drawToBlob() {
+            try {
+              var w = img.naturalWidth || img.width;
+              var h = img.naturalHeight || img.height;
+              if (!w || !h) return resolve(null);
+              var canvas = document.createElement('canvas');
+              canvas.width = w;
+              canvas.height = h;
+              var ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, w, h);
+              canvas.toBlob(function(blob) {
+                if (!blob || blob.size === 0) return resolve(null);
+                pasteCounter++;
+                resolve(new File([blob], 'pasted-photo-' + pasteCounter + '.jpg', { type: 'image/jpeg' }));
+              }, 'image/jpeg', 0.92);
+            } catch (err) {
+              resolve(null);
+            }
+          }
+
+          if (img.complete && img.naturalWidth > 0) {
+            drawToBlob();
+          } else {
+            var settled = false;
+            var done = function() {
+              if (settled) return;
+              settled = true;
+              drawToBlob();
+            };
+            img.addEventListener('load', done, { once: true });
+            img.addEventListener('error', function() { if (!settled) { settled = true; resolve(null); } }, { once: true });
+            setTimeout(done, 500);
+          }
+        });
+      }
+
+      async function harvestPastePadImages() {
+        var imgs = Array.prototype.slice.call(pastePad.querySelectorAll('img'));
+        if (imgs.length === 0) return { found: false, srcs: [] };
+        var srcs = imgs.map(function(el) { return (el.getAttribute('src') || '').slice(0, 40); });
+        var harvested = [];
+        for (var i = 0; i < imgs.length; i++) {
+          var f = await imgElementToFile(imgs[i]);
+          if (f) harvested.push(f);
         }
-        pastePad.innerHTML = '';
         if (harvested.length > 0) {
+          pastePad.innerHTML = '';
           addFilesToQueue(harvested);
           pastePad.blur();
-          return true;
+          return { found: true, srcs: srcs };
         }
-        return false;
+        return { found: false, srcs: srcs };
+      }
+
+      function describeClipboardDebug(cd) {
+        if (!cd) return 'no clipboardData';
+        var types = cd.types ? Array.prototype.slice.call(cd.types).join(',') : '';
+        var nFiles = cd.files ? cd.files.length : 0;
+        var itemDesc = [];
+        if (cd.items) {
+          for (var i = 0; i < cd.items.length; i++) {
+            itemDesc.push(cd.items[i].kind + ':' + (cd.items[i].type || 'empty'));
+          }
+        }
+        return 'types=[' + types + '] files=' + nFiles + ' items=[' + itemDesc.join(',') + ']';
       }
 
       pastePad.addEventListener('paste', function(e) {
@@ -820,7 +879,12 @@
           return;
         }
         clearAlert();
-        var pastedFiles = extractFilesFromClipboardData(e.clipboardData);
+        var cd = e.clipboardData;
+        var dbg = describeClipboardDebug(cd);
+        var htmlPayload = '';
+        try { htmlPayload = cd ? (cd.getData('text/html') || '') : ''; } catch (err) {}
+
+        var pastedFiles = extractFilesFromClipboardData(cd);
         if (pastedFiles.length > 0) {
           e.preventDefault();
           addFilesToQueue(pastedFiles);
@@ -828,14 +892,31 @@
           pastePad.blur();
           return;
         }
-        // Let WebKit insert any blob/data <img> into pastePad, then harvest it cleanly
-        setTimeout(async function() {
-          var gotImg = await harvestPastePadImages();
-          if (!gotImg) {
-            showAlert('No photo found in that paste. Copy a photo first, then paste here.');
-            pastePad.blur();
+
+        // Poll briefly for WebKit-inserted <img> (including webkit-fake-url://) or data:image in HTML
+        var attempts = 0;
+        var checkDelays = [60, 150, 350, 600];
+        async function tryHarvest() {
+          var res = await harvestPastePadImages();
+          if (res.found) return;
+          if (attempts < checkDelays.length) {
+            var delay = checkDelays[attempts++];
+            setTimeout(tryHarvest, delay);
+            return;
           }
-        }, 80);
+          var htmlImgs = await extractImagesFromHtmlString(htmlPayload);
+          if (htmlImgs.length > 0) {
+            pastePad.innerHTML = '';
+            addFilesToQueue(htmlImgs);
+            pastePad.blur();
+            return;
+          }
+          var padSnap = (pastePad.innerHTML || '').slice(0, 80);
+          pastePad.innerHTML = '';
+          pastePad.blur();
+          showAlert('No photo came through from that paste. Use Choose Photos instead. (' + dbg + (padSnap ? ' html=' + padSnap : '') + ')');
+        }
+        setTimeout(tryHarvest, checkDelays[attempts++]);
       });
 
       pastePad.addEventListener('blur', function() {
