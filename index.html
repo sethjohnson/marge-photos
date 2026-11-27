@@ -319,6 +319,19 @@
       cursor: not-allowed;
     }
 
+    .sent-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-inline-size: 36px;
+      min-block-size: 36px;
+      border-radius: 999px;
+      background: var(--success-soft);
+      color: var(--success);
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
     .progress-box {
       margin-block: 1.25rem;
       padding: 0.95rem 1rem;
@@ -449,7 +462,6 @@
       <h2 id="form-heading" class="visually-hidden">Photo upload form</h2>
 
       <div id="alertBox" class="banner error" role="alert" hidden></div>
-      <div id="successBox" class="banner success" role="status" aria-live="polite" hidden></div>
 
       <form id="uploadForm" novalidate>
         <div class="hp-field" aria-hidden="true">
@@ -516,8 +528,10 @@
           <progress id="uploadProgress" max="100" value="0" aria-labelledby="progressText"></progress>
         </div>
 
+        <div id="successBox" class="banner success" role="status" aria-live="polite" hidden></div>
+
         <button type="submit" id="submitBtn" class="submit-btn">Send Photos</button>
-        <button type="button" id="moreBtn" class="secondary-btn" hidden>Share More Photos</button>
+        <button type="button" id="moreBtn" class="submit-btn" hidden>Share More Photos</button>
       </form>
     </section>
 
@@ -627,21 +641,29 @@
             meta.appendChild(stEl);
           }
 
-          var removeBtn = document.createElement('button');
-          removeBtn.type = 'button';
-          removeBtn.className = 'remove-btn';
-          removeBtn.setAttribute('aria-label', 'Remove ' + item.file.name);
-          removeBtn.textContent = '✕';
-          removeBtn.disabled = isUploading || item.status === 'done';
-          removeBtn.addEventListener('click', function() {
-            if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-            queue.splice(idx, 1);
-            renderQueue();
-          });
-
           li.appendChild(thumb);
           li.appendChild(meta);
-          li.appendChild(removeBtn);
+
+          if (item.status === 'done') {
+            var badge = document.createElement('span');
+            badge.className = 'sent-badge';
+            badge.setAttribute('aria-label', 'Sent');
+            badge.textContent = '✓';
+            li.appendChild(badge);
+          } else {
+            var removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'remove-btn';
+            removeBtn.setAttribute('aria-label', 'Remove ' + item.file.name);
+            removeBtn.textContent = '✕';
+            removeBtn.disabled = isUploading;
+            removeBtn.addEventListener('click', function() {
+              if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+              queue.splice(idx, 1);
+              renderQueue();
+            });
+            li.appendChild(removeBtn);
+          }
           fileListEl.appendChild(li);
         });
       }
@@ -663,6 +685,17 @@
         clearAlert();
         successBox.hidden = true;
         moreBtn.hidden = true;
+        submitBtn.hidden = false;
+        submitBtn.textContent = 'Send Photos';
+
+        // If a previous batch already finished completely, start fresh for the new photos
+        if (queue.length > 0 && queue.every(function(it) { return it.status === 'done'; })) {
+          queue.forEach(function(it) {
+            if (it.previewUrl) URL.revokeObjectURL(it.previewUrl);
+          });
+          queue = [];
+          progressBox.hidden = true;
+        }
 
         var skippedLarge = 0;
         var added = 0;
@@ -997,6 +1030,8 @@
         successBox.hidden = true;
         progressBox.hidden = true;
         moreBtn.hidden = true;
+        submitBtn.hidden = false;
+        submitBtn.textContent = 'Send Photos';
         clearAlert();
         renderQueue();
         pickerBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1091,11 +1126,13 @@
           progressText.textContent = 'Sent ' + sentCount + ' photo' + (sentCount === 1 ? '' : 's') + '.';
           successBox.textContent = 'Thanks, ' + uploaderName + '! We got your ' + sentCount + ' photo' + (sentCount === 1 ? '' : 's') + '.';
           successBox.hidden = false;
+          submitBtn.hidden = true;
           submitBtn.textContent = 'Send Photos';
           moreBtn.hidden = false;
         } else {
           progressText.textContent = sentCount + ' sent, ' + failedCount + ' failed.';
           showAlert(failedCount + ' photo(s) failed to upload. Tap Retry Failed Photos to try again.');
+          submitBtn.hidden = false;
           submitBtn.textContent = 'Retry Failed Photos';
         }
       });
