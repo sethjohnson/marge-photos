@@ -860,19 +860,6 @@
         return { found: false, srcs: srcs };
       }
 
-      function describeClipboardDebug(cd) {
-        if (!cd) return 'no clipboardData';
-        var types = cd.types ? Array.prototype.slice.call(cd.types).join(',') : '';
-        var nFiles = cd.files ? cd.files.length : 0;
-        var itemDesc = [];
-        if (cd.items) {
-          for (var i = 0; i < cd.items.length; i++) {
-            itemDesc.push(cd.items[i].kind + ':' + (cd.items[i].type || 'empty'));
-          }
-        }
-        return 'types=[' + types + '] files=' + nFiles + ' items=[' + itemDesc.join(',') + ']';
-      }
-
       pastePad.addEventListener('paste', function(e) {
         if (isUploading) {
           e.preventDefault();
@@ -880,7 +867,6 @@
         }
         clearAlert();
         var cd = e.clipboardData;
-        var dbg = describeClipboardDebug(cd);
         var htmlPayload = '';
         try { htmlPayload = cd ? (cd.getData('text/html') || '') : ''; } catch (err) {}
 
@@ -911,10 +897,9 @@
             pastePad.blur();
             return;
           }
-          var padSnap = (pastePad.innerHTML || '').slice(0, 80);
           pastePad.innerHTML = '';
           pastePad.blur();
-          showAlert('No photo came through from that paste. Use Choose Photos instead. (' + dbg + (padSnap ? ' html=' + padSnap : '') + ')');
+          showAlert('Your browser could not read that copied photo. Save it to your device and use Choose Photos instead.');
         }
         setTimeout(tryHarvest, checkDelays[attempts++]);
       });
