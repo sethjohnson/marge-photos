@@ -175,87 +175,55 @@
       pointer-events: none;
     }
 
-    .picker-label {
+    .picker-box {
+      position: relative;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       text-align: center;
-      gap: 0.35rem;
       min-block-size: 7.5rem;
       padding: 1.25rem 1rem;
       border: 2px dashed var(--accent);
       border-radius: 12px;
       background: var(--accent-soft);
       color: var(--accent-hover);
-      cursor: pointer;
       transition: background-color 0.15s, border-color 0.15s;
     }
 
-    .picker-label:hover,
-    .picker-label.drag-over {
+    .picker-box:hover,
+    .picker-box.drag-over {
       background: #dfe9e5;
     }
 
-    .paste-row {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 0.5rem;
-      margin-block-start: 0.55rem;
-      align-items: stretch;
-    }
-
-    .paste-pad {
-      min-block-size: 48px;
-      display: flex;
-      align-items: center;
-      padding: 0.6rem 0.85rem;
-      border: 1.5px solid var(--border-strong);
-      border-radius: 10px;
-      background: var(--surface);
-      color: var(--text);
-      font: inherit;
-      font-size: max(1rem, 1em);
-      cursor: text;
-      overflow-wrap: anywhere;
-    }
-
-    .paste-pad:empty::before {
-      content: attr(data-placeholder);
-      color: var(--muted);
-      font-size: 0.92rem;
-      pointer-events: none;
-    }
-
-    .paste-pad:focus-visible {
+    .picker-box:has(.picker-paste-overlay:focus-visible) {
       outline: 3px solid var(--focus);
       outline-offset: 2px;
-      border-color: var(--accent);
     }
 
-    .paste-btn {
-      min-block-size: 48px;
-      border: 1.5px solid var(--border-strong);
+    .picker-visual {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.35rem;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .picker-paste-overlay {
+      position: absolute;
+      inset: 0;
       border-radius: 10px;
-      background: var(--surface-soft);
-      color: var(--text);
-      font: inherit;
-      font-size: 0.94rem;
-      font-weight: 600;
       cursor: pointer;
-      padding: 0.6rem 0.95rem;
-      white-space: nowrap;
-      transition: background-color 0.15s, border-color 0.15s;
-    }
-
-    .paste-btn:hover:not(:disabled) {
-      background: #e6dfd4;
-      border-color: var(--accent);
-    }
-
-    .paste-btn:disabled {
-      opacity: 0.55;
-      cursor: not-allowed;
+      color: transparent;
+      caret-color: transparent;
+      background: transparent;
+      outline: none;
+      -webkit-user-select: text;
+      user-select: text;
+      -webkit-touch-callout: default;
+      overflow: hidden;
     }
 
     .picker-title {
@@ -516,10 +484,20 @@
         </div>
 
         <div class="field">
-          <label for="photoInput" class="picker-label" id="pickerLabel">
-            <span class="picker-title">Choose Photos</span>
-            <span class="picker-sub">Pick one or more photos (up to 20 MB each)</span>
-          </label>
+          <div class="picker-box" id="pickerBox">
+            <div class="picker-visual" aria-hidden="true">
+              <span class="picker-title">Choose Photos</span>
+              <span class="picker-sub">Tap to pick photos, or long-press to paste (up to 20 MB each)</span>
+            </div>
+            <div
+              id="pastePad"
+              class="picker-paste-overlay"
+              contenteditable="true"
+              inputmode="none"
+              role="button"
+              tabindex="0"
+              aria-label="Choose photos or long-press to paste a copied photo"></div>
+          </div>
           <input
             type="file"
             id="photoInput"
@@ -527,16 +505,6 @@
             accept="image/*"
             multiple
             class="visually-hidden">
-          <div class="paste-row">
-            <div
-              id="pastePad"
-              class="paste-pad"
-              contenteditable="true"
-              role="textbox"
-              aria-label="Paste a copied photo here"
-              data-placeholder="Tap here, then tap Paste to add a copied photo"></div>
-            <button type="button" id="pasteBtn" class="paste-btn">Paste</button>
-          </div>
           <ul id="fileList" class="file-list" aria-label="Selected photos" hidden></ul>
         </div>
 
@@ -567,10 +535,11 @@
       var form = document.getElementById('uploadForm');
       var nameInput = document.getElementById('uploaderName');
       var photoInput = document.getElementById('photoInput');
-      var pickerLabel = document.getElementById('pickerLabel');
+      var pickerBox = document.getElementById('pickerBox');
       var pastePad = document.getElementById('pastePad');
-      var pasteBtn = document.getElementById('pasteBtn');
       var pasteCounter = 0;
+      var touchStartAt = 0;
+      var suppressPickerUntil = 0;
 
       try {
         var savedName = localStorage.getItem('marge_uploader_name');
@@ -904,79 +873,36 @@
         setTimeout(tryHarvest, checkDelays[attempts++]);
       });
 
-      pastePad.addEventListener('blur', function() {
-        pastePad.innerHTML = '';
+      pastePad.addEventListener('touchstart', function() {
+        touchStartAt = Date.now();
+      }, { passive: true });
+
+      pastePad.addEventListener('touchend', function() {
+        if (touchStartAt && (Date.now() - touchStartAt) >= 300) {
+          // Long-press: suppress opening the file picker so the native iOS Paste menu stays open
+          suppressPickerUntil = Date.now() + 650;
+        }
+      }, { passive: true });
+
+      pastePad.addEventListener('click', function() {
+        if (isUploading) return;
+        if (Date.now() < suppressPickerUntil) return;
+        pastePad.blur();
+        photoInput.click();
       });
 
-      pasteBtn.addEventListener('click', async function() {
-        if (isUploading) return;
-        clearAlert();
-
-        if (!navigator.clipboard || typeof navigator.clipboard.read !== 'function') {
-          pastePad.focus();
-          showAlert('Tap Paste in the keyboard bar or press Ctrl+V / Cmd+V.');
-          return;
+      pastePad.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          if (!isUploading) {
+            pastePad.blur();
+            photoInput.click();
+          }
         }
+      });
 
-        pasteBtn.disabled = true;
-        var originalLabel = pasteBtn.textContent;
-        pasteBtn.textContent = '...';
-
-        try {
-          var clipItems = await navigator.clipboard.read();
-          var preferredMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'];
-          var pastedFiles = [];
-
-          for (var i = 0; i < clipItems.length; i++) {
-            var clipItem = clipItems[i];
-            var types = clipItem.types || [];
-            var chosenType = '';
-            for (var p = 0; p < preferredMimes.length; p++) {
-              if (types.indexOf(preferredMimes[p]) !== -1) {
-                chosenType = preferredMimes[p];
-                break;
-              }
-            }
-            if (!chosenType) {
-              for (var t = 0; t < types.length; t++) {
-                if (types[t].indexOf('image/') === 0 && types[t] !== 'image/svg+xml') {
-                  chosenType = types[t];
-                  break;
-                }
-              }
-            }
-            if (chosenType) {
-              var blob = await clipItem.getType(chosenType);
-              pasteCounter++;
-              var ext = extFromMime(chosenType);
-              pastedFiles.push(new File([blob], 'pasted-photo-' + pasteCounter + '.' + ext, { type: chosenType }));
-            } else if (types.indexOf('text/html') !== -1) {
-              var htmlBlob = await clipItem.getType('text/html');
-              var htmlText = await htmlBlob.text();
-              var htmlImgs = await extractImagesFromHtmlString(htmlText);
-              pastedFiles = pastedFiles.concat(htmlImgs);
-            }
-          }
-
-          if (pastedFiles.length === 0) {
-            // iOS WebKit often hides JPEG/HEIC from clipboard.read(); focus the paste pad so
-            // iOS's native "Paste from Photos" keyboard bar works in one tap.
-            pastePad.focus();
-            showAlert('Tap "Photo — Paste" above your keyboard (or long-press the box and tap Paste).');
-          } else {
-            addFilesToQueue(pastedFiles);
-          }
-        } catch (err) {
-          pastePad.focus();
-          if (err && err.name === 'NotAllowedError') {
-            showAlert('Tap "Photo — Paste" above your keyboard, or long-press the box and tap Paste.');
-          } else {
-            showAlert('Tap inside the paste box and choose Paste, or use Choose Photos.');
-          }
-        } finally {
-          pasteBtn.disabled = false;
-          pasteBtn.textContent = originalLabel;
-        }
+      pastePad.addEventListener('blur', function() {
+        pastePad.innerHTML = '';
       });
 
       document.addEventListener('paste', function(e) {
@@ -989,18 +915,18 @@
       });
 
       ['dragenter', 'dragover'].forEach(function(ev) {
-        pickerLabel.addEventListener(ev, function(e) {
+        pickerBox.addEventListener(ev, function(e) {
           e.preventDefault();
-          pickerLabel.classList.add('drag-over');
+          pickerBox.classList.add('drag-over');
         });
       });
       ['dragleave', 'drop'].forEach(function(ev) {
-        pickerLabel.addEventListener(ev, function(e) {
+        pickerBox.addEventListener(ev, function(e) {
           e.preventDefault();
-          pickerLabel.classList.remove('drag-over');
+          pickerBox.classList.remove('drag-over');
         });
       });
-      pickerLabel.addEventListener('drop', function(e) {
+      pickerBox.addEventListener('drop', function(e) {
         if (isUploading) return;
         var dropped = Array.prototype.slice.call((e.dataTransfer && e.dataTransfer.files) || []);
         var imgs = dropped.filter(function(f) { return !f.type || f.type.indexOf('image/') === 0; });
@@ -1073,7 +999,7 @@
         moreBtn.hidden = true;
         clearAlert();
         renderQueue();
-        document.getElementById('pickerLabel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        pickerBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
 
       form.addEventListener('submit', async function(e) {
@@ -1095,7 +1021,7 @@
         var pending = queue.filter(function(item) { return item.status !== 'done'; });
         if (pending.length === 0) {
           showAlert('Choose at least one photo first.');
-          document.getElementById('pickerLabel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+          pickerBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
           return;
         }
 
