@@ -192,8 +192,35 @@
       transition: background-color 0.15s, border-color 0.15s;
     }
 
-    .picker-label:hover {
+    .picker-label:hover,
+    .picker-label.drag-over {
       background: #dfe9e5;
+    }
+
+    .paste-btn {
+      width: 100%;
+      min-block-size: 48px;
+      margin-block-start: 0.55rem;
+      border: 1.5px solid var(--border-strong);
+      border-radius: 10px;
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.96rem;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0.65rem 1rem;
+      transition: background-color 0.15s, border-color 0.15s;
+    }
+
+    .paste-btn:hover:not(:disabled) {
+      background: var(--surface-soft);
+      border-color: var(--accent);
+    }
+
+    .paste-btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
     }
 
     .picker-title {
@@ -465,6 +492,7 @@
             accept="image/*"
             multiple
             class="visually-hidden">
+          <button type="button" id="pasteBtn" class="paste-btn">Paste Photo from Clipboard</button>
           <ul id="fileList" class="file-list" aria-label="Selected photos" hidden></ul>
         </div>
 
@@ -495,6 +523,9 @@
       var form = document.getElementById('uploadForm');
       var nameInput = document.getElementById('uploaderName');
       var photoInput = document.getElementById('photoInput');
+      var pickerLabel = document.getElementById('pickerLabel');
+      var pasteBtn = document.getElementById('pasteBtn');
+      var pasteCounter = 0;
 
       try {
         var savedName = localStorage.getItem('marge_uploader_name');
@@ -601,17 +632,31 @@
         });
       }
 
-      photoInput.addEventListener('change', function() {
+      function extFromMime(mime) {
+        var map = {
+          'image/jpeg': 'jpg',
+          'image/jpg': 'jpg',
+          'image/png': 'png',
+          'image/webp': 'webp',
+          'image/gif': 'gif',
+          'image/heic': 'heic',
+          'image/heif': 'heif'
+        };
+        return map[(mime || '').toLowerCase()] || 'jpg';
+      }
+
+      function addFilesToQueue(files) {
         clearAlert();
         successBox.hidden = true;
         moreBtn.hidden = true;
 
-        var files = Array.prototype.slice.call(photoInput.files || []);
         var skippedLarge = 0;
+        var added = 0;
 
         files.forEach(function(file) {
+          if (!file) return;
           var extMatch = (file.name || '').match(/\.([A-Za-z0-9]+)$/);
-          var extLabel = extMatch ? extMatch[1].toUpperCase().slice(0, 4) : 'IMG';
+          var extLabel = extMatch ? extMatch[1].toUpperCase().slice(0, 4) : extFromMime(file.type).toUpperCase();
           if (file.size > MAX_BYTES) {
             skippedLarge++;
             return;
@@ -629,13 +674,125 @@
             statusText: '',
             statusClass: ''
           });
+          added++;
         });
 
-        photoInput.value = '';
         if (skippedLarge > 0) {
           showAlert(skippedLarge + ' file(s) were skipped because they exceed the ' + Math.floor(MAX_BYTES / (1024 * 1024)) + ' MB per-photo limit.');
         }
         renderQueue();
+        return added;
+      }
+
+      photoInput.addEventListener('change', function() {
+        var files = Array.prototype.slice.call(photoInput.files || []);
+        photoInput.value = '';
+        addFilesToQueue(files);
+      });
+
+      pasteBtn.addEventListener('click', async function() {
+        if (isUploading) return;
+        clearAlert();
+
+        if (!navigator.clipboard || typeof navigator.clipboard.read !== 'function') {
+          showAlert('Your browser does not support the paste button. Press Ctrl+V (or Cmd+V) to paste a copied photo.');
+          return;
+        }
+
+        pasteBtn.disabled = true;
+        var originalLabel = pasteBtn.textContent;
+        pasteBtn.textContent = 'Reading Clipboard...';
+
+        try {
+          var clipItems = await navigator.clipboard.read();
+          var preferredMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'];
+          var pastedFiles = [];
+
+          for (var i = 0; i < clipItems.length; i++) {
+            var clipItem = clipItems[i];
+            var types = clipItem.types || [];
+            var chosenType = '';
+            for (var p = 0; p < preferredMimes.length; p++) {
+              if (types.indexOf(preferredMimes[p]) !== -1) {
+                chosenType = preferredMimes[p];
+                break;
+              }
+            }
+            if (!chosenType) {
+              for (var t = 0; t < types.length; t++) {
+                if (types[t].indexOf('image/') === 0 && types[t] !== 'image/svg+xml') {
+                  chosenType = types[t];
+                  break;
+                }
+              }
+            }
+            if (chosenType) {
+              var blob = await clipItem.getType(chosenType);
+              pasteCounter++;
+              var ext = extFromMime(chosenType);
+              var fname = 'pasted-photo-' + pasteCounter + '.' + ext;
+              pastedFiles.push(new File([blob], fname, { type: chosenType }));
+            }
+          }
+
+          if (pastedFiles.length === 0) {
+            showAlert('No photo found in your clipboard. Copy a photo first, then tap Paste Photo.');
+          } else {
+            addFilesToQueue(pastedFiles);
+          }
+        } catch (err) {
+          if (err && err.name === 'NotAllowedError') {
+            showAlert('Clipboard paste was cancelled. Tap Paste when prompted to add your copied photo.');
+          } else {
+            showAlert('Could not read clipboard. Try Ctrl+V / Cmd+V or Choose Photos.');
+          }
+        } finally {
+          pasteBtn.disabled = false;
+          pasteBtn.textContent = originalLabel;
+        }
+      });
+
+      document.addEventListener('paste', function(e) {
+        if (isUploading) return;
+        var items = e.clipboardData && e.clipboardData.items;
+        if (!items || items.length === 0) return;
+
+        var pastedFiles = [];
+        for (var i = 0; i < items.length; i++) {
+          var it = items[i];
+          if (it.kind === 'file' && it.type && it.type.indexOf('image/') === 0 && it.type !== 'image/svg+xml') {
+            var f = it.getAsFile();
+            if (f) {
+              pasteCounter++;
+              var ext = extFromMime(f.type);
+              var name = (f.name && f.name !== 'image.png') ? f.name : ('pasted-photo-' + pasteCounter + '.' + ext);
+              pastedFiles.push(new File([f], name, { type: f.type }));
+            }
+          }
+        }
+        if (pastedFiles.length > 0) {
+          e.preventDefault();
+          addFilesToQueue(pastedFiles);
+        }
+      });
+
+      ['dragenter', 'dragover'].forEach(function(ev) {
+        pickerLabel.addEventListener(ev, function(e) {
+          e.preventDefault();
+          pickerLabel.classList.add('drag-over');
+        });
+      });
+      ['dragleave', 'drop'].forEach(function(ev) {
+        pickerLabel.addEventListener(ev, function(e) {
+          e.preventDefault();
+          pickerLabel.classList.remove('drag-over');
+        });
+      });
+      pickerLabel.addEventListener('drop', function(e) {
+        if (isUploading) return;
+        var dropped = Array.prototype.slice.call((e.dataTransfer && e.dataTransfer.files) || []);
+        var imgs = dropped.filter(function(f) { return !f.type || f.type.indexOf('image/') === 0; });
+        if (imgs.length > 0) addFilesToQueue(imgs);
       });
 
       function readFileAsBase64(file) {
