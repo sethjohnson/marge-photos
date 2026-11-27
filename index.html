@@ -197,24 +197,59 @@
       background: #dfe9e5;
     }
 
-    .paste-btn {
-      width: 100%;
-      min-block-size: 48px;
+    .paste-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 0.5rem;
       margin-block-start: 0.55rem;
+      align-items: stretch;
+    }
+
+    .paste-pad {
+      min-block-size: 48px;
+      display: flex;
+      align-items: center;
+      padding: 0.6rem 0.85rem;
       border: 1.5px solid var(--border-strong);
       border-radius: 10px;
       background: var(--surface);
       color: var(--text);
       font: inherit;
-      font-size: 0.96rem;
+      font-size: max(1rem, 1em);
+      cursor: text;
+      overflow-wrap: anywhere;
+    }
+
+    .paste-pad:empty::before {
+      content: attr(data-placeholder);
+      color: var(--muted);
+      font-size: 0.92rem;
+      pointer-events: none;
+    }
+
+    .paste-pad:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+      border-color: var(--accent);
+    }
+
+    .paste-btn {
+      min-block-size: 48px;
+      border: 1.5px solid var(--border-strong);
+      border-radius: 10px;
+      background: var(--surface-soft);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.94rem;
       font-weight: 600;
       cursor: pointer;
-      padding: 0.65rem 1rem;
+      padding: 0.6rem 0.95rem;
+      white-space: nowrap;
       transition: background-color 0.15s, border-color 0.15s;
     }
 
     .paste-btn:hover:not(:disabled) {
-      background: var(--surface-soft);
+      background: #e6dfd4;
       border-color: var(--accent);
     }
 
@@ -492,7 +527,16 @@
             accept="image/*"
             multiple
             class="visually-hidden">
-          <button type="button" id="pasteBtn" class="paste-btn">Paste Photo from Clipboard</button>
+          <div class="paste-row">
+            <div
+              id="pastePad"
+              class="paste-pad"
+              contenteditable="true"
+              role="textbox"
+              aria-label="Paste a copied photo here"
+              data-placeholder="Tap here, then tap Paste to add a copied photo"></div>
+            <button type="button" id="pasteBtn" class="paste-btn">Paste</button>
+          </div>
           <ul id="fileList" class="file-list" aria-label="Selected photos" hidden></ul>
         </div>
 
@@ -524,6 +568,7 @@
       var nameInput = document.getElementById('uploaderName');
       var photoInput = document.getElementById('photoInput');
       var pickerLabel = document.getElementById('pickerLabel');
+      var pastePad = document.getElementById('pastePad');
       var pasteBtn = document.getElementById('pasteBtn');
       var pasteCounter = 0;
 
@@ -690,18 +735,126 @@
         addFilesToQueue(files);
       });
 
+      function extractFilesFromClipboardData(cd) {
+        var found = [];
+        if (!cd) return found;
+
+        // 1. Check clipboardData.files first (most reliable on iOS WebKit for JPEG/HEIC)
+        if (cd.files && cd.files.length > 0) {
+          for (var i = 0; i < cd.files.length; i++) {
+            var f = cd.files[i];
+            if (f && (!f.type || (f.type.indexOf('image/') === 0 && f.type !== 'image/svg+xml'))) {
+              pasteCounter++;
+              var ext = extFromMime(f.type);
+              var name = (f.name && f.name !== 'image.png' && f.name !== 'image.jpg') ? f.name : ('pasted-photo-' + pasteCounter + '.' + ext);
+              found.push(new File([f], name, { type: f.type || 'image/jpeg' }));
+            }
+          }
+          if (found.length > 0) return found;
+        }
+
+        // 2. Fallback: clipboardData.items
+        if (cd.items && cd.items.length > 0) {
+          for (var j = 0; j < cd.items.length; j++) {
+            var it = cd.items[j];
+            if (it.kind === 'file' && it.type && it.type.indexOf('image/') === 0 && it.type !== 'image/svg+xml') {
+              var itemFile = it.getAsFile();
+              if (itemFile) {
+                pasteCounter++;
+                var ext2 = extFromMime(itemFile.type);
+                var name2 = (itemFile.name && itemFile.name !== 'image.png' && itemFile.name !== 'image.jpg') ? itemFile.name : ('pasted-photo-' + pasteCounter + '.' + ext2);
+                found.push(new File([itemFile], name2, { type: itemFile.type }));
+              }
+            }
+          }
+        }
+        return found;
+      }
+
+      async function extractImagesFromHtmlString(htmlStr) {
+        var found = [];
+        if (!htmlStr) return found;
+        var matches = htmlStr.match(/data:image\/(?:jpeg|jpg|png|webp|gif|heic|heif);base64,[A-Za-z0-9+/=]+/gi) || [];
+        for (var i = 0; i < matches.length; i++) {
+          try {
+            var res = await fetch(matches[i]);
+            var blob = await res.blob();
+            pasteCounter++;
+            var ext = extFromMime(blob.type);
+            found.push(new File([blob], 'pasted-photo-' + pasteCounter + '.' + ext, { type: blob.type }));
+          } catch (e) {}
+        }
+        return found;
+      }
+
+      async function harvestPastePadImages() {
+        var imgs = Array.prototype.slice.call(pastePad.querySelectorAll('img'));
+        var harvested = [];
+        for (var i = 0; i < imgs.length; i++) {
+          var src = imgs[i].getAttribute('src') || '';
+          if (src.indexOf('blob:') === 0 || src.indexOf('data:image/') === 0) {
+            try {
+              var res = await fetch(src);
+              var blob = await res.blob();
+              if (blob && blob.size > 0 && blob.type !== 'image/svg+xml') {
+                pasteCounter++;
+                var mime = (blob.type && blob.type.indexOf('image/') === 0) ? blob.type : 'image/jpeg';
+                var ext = extFromMime(mime);
+                harvested.push(new File([blob], 'pasted-photo-' + pasteCounter + '.' + ext, { type: mime }));
+              }
+            } catch (e) {}
+          }
+        }
+        pastePad.innerHTML = '';
+        if (harvested.length > 0) {
+          addFilesToQueue(harvested);
+          pastePad.blur();
+          return true;
+        }
+        return false;
+      }
+
+      pastePad.addEventListener('paste', function(e) {
+        if (isUploading) {
+          e.preventDefault();
+          return;
+        }
+        clearAlert();
+        var pastedFiles = extractFilesFromClipboardData(e.clipboardData);
+        if (pastedFiles.length > 0) {
+          e.preventDefault();
+          addFilesToQueue(pastedFiles);
+          pastePad.innerHTML = '';
+          pastePad.blur();
+          return;
+        }
+        // Let WebKit insert any blob/data <img> into pastePad, then harvest it cleanly
+        setTimeout(async function() {
+          var gotImg = await harvestPastePadImages();
+          if (!gotImg) {
+            showAlert('No photo found in that paste. Copy a photo first, then paste here.');
+            pastePad.blur();
+          }
+        }, 80);
+      });
+
+      pastePad.addEventListener('blur', function() {
+        pastePad.innerHTML = '';
+      });
+
       pasteBtn.addEventListener('click', async function() {
         if (isUploading) return;
         clearAlert();
 
         if (!navigator.clipboard || typeof navigator.clipboard.read !== 'function') {
-          showAlert('Your browser does not support the paste button. Press Ctrl+V (or Cmd+V) to paste a copied photo.');
+          pastePad.focus();
+          showAlert('Tap Paste in the keyboard bar or press Ctrl+V / Cmd+V.');
           return;
         }
 
         pasteBtn.disabled = true;
         var originalLabel = pasteBtn.textContent;
-        pasteBtn.textContent = 'Reading Clipboard...';
+        pasteBtn.textContent = '...';
 
         try {
           var clipItems = await navigator.clipboard.read();
@@ -730,21 +883,29 @@
               var blob = await clipItem.getType(chosenType);
               pasteCounter++;
               var ext = extFromMime(chosenType);
-              var fname = 'pasted-photo-' + pasteCounter + '.' + ext;
-              pastedFiles.push(new File([blob], fname, { type: chosenType }));
+              pastedFiles.push(new File([blob], 'pasted-photo-' + pasteCounter + '.' + ext, { type: chosenType }));
+            } else if (types.indexOf('text/html') !== -1) {
+              var htmlBlob = await clipItem.getType('text/html');
+              var htmlText = await htmlBlob.text();
+              var htmlImgs = await extractImagesFromHtmlString(htmlText);
+              pastedFiles = pastedFiles.concat(htmlImgs);
             }
           }
 
           if (pastedFiles.length === 0) {
-            showAlert('No photo found in your clipboard. Copy a photo first, then tap Paste Photo.');
+            // iOS WebKit often hides JPEG/HEIC from clipboard.read(); focus the paste pad so
+            // iOS's native "Paste from Photos" keyboard bar works in one tap.
+            pastePad.focus();
+            showAlert('Tap "Photo — Paste" above your keyboard (or long-press the box and tap Paste).');
           } else {
             addFilesToQueue(pastedFiles);
           }
         } catch (err) {
+          pastePad.focus();
           if (err && err.name === 'NotAllowedError') {
-            showAlert('Clipboard paste was cancelled. Tap Paste when prompted to add your copied photo.');
+            showAlert('Tap "Photo — Paste" above your keyboard, or long-press the box and tap Paste.');
           } else {
-            showAlert('Could not read clipboard. Try Ctrl+V / Cmd+V or Choose Photos.');
+            showAlert('Tap inside the paste box and choose Paste, or use Choose Photos.');
           }
         } finally {
           pasteBtn.disabled = false;
@@ -753,23 +914,8 @@
       });
 
       document.addEventListener('paste', function(e) {
-        if (isUploading) return;
-        var items = e.clipboardData && e.clipboardData.items;
-        if (!items || items.length === 0) return;
-
-        var pastedFiles = [];
-        for (var i = 0; i < items.length; i++) {
-          var it = items[i];
-          if (it.kind === 'file' && it.type && it.type.indexOf('image/') === 0 && it.type !== 'image/svg+xml') {
-            var f = it.getAsFile();
-            if (f) {
-              pasteCounter++;
-              var ext = extFromMime(f.type);
-              var name = (f.name && f.name !== 'image.png') ? f.name : ('pasted-photo-' + pasteCounter + '.' + ext);
-              pastedFiles.push(new File([f], name, { type: f.type }));
-            }
-          }
-        }
+        if (isUploading || e.target === pastePad) return;
+        var pastedFiles = extractFilesFromClipboardData(e.clipboardData);
         if (pastedFiles.length > 0) {
           e.preventDefault();
           addFilesToQueue(pastedFiles);
