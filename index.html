@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Share Photos of Marge</title>
+  <style>
+    :root {
+      --bg: #f8f5f0;
+      --surface: #ffffff;
+      --surface-soft: #f2ede5;
+      --text: #22201d;
+      --muted: #5c564e;
+      --border: #d8d0c5;
+      --border-strong: #8f8578;
+      --accent: #3f5c52;
+      --accent-hover: #314840;
+      --accent-soft: #e9f0ed;
+      --danger: #a23b3b;
+      --danger-soft: #fbeeee;
+      --success: #2d6247;
+      --success-soft: #e9f4ee;
+      --focus: #1d4ed8;
+      --radius: 14px;
+      --target-size: 48px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html {
+      scroll-padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      overflow-wrap: break-word;
+      padding:
+        max(1rem, env(safe-area-inset-top, 0px))
+        max(1rem, env(safe-area-inset-right, 0px))
+        max(2rem, env(safe-area-inset-bottom, 0px))
+        max(1rem, env(safe-area-inset-left, 0px));
+    }
+
+    .container {
+      max-inline-size: 38rem;
+      margin-inline: auto;
+    }
+
+    header {
+      text-align: center;
+      padding-block: 1.25rem 1.5rem;
+    }
+
+    .eyebrow {
+      font-size: 0.85rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 600;
+      margin: 0 0 0.4rem;
+    }
+
+    h1 {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(1.6rem, 5vw, 2.15rem);
+      font-weight: 500;
+      line-height: 1.2;
+      margin: 0 0 0.65rem;
+      text-wrap: balance;
+      color: var(--text);
+    }
+
+    .subtitle {
+      margin: 0 auto;
+      max-inline-size: 32rem;
+      color: var(--muted);
+      font-size: 0.98rem;
+      text-wrap: pretty;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: clamp(1.1rem, 4vw, 1.75rem);
+      box-shadow: 0 4px 18px rgb(34 32 29 / 0.05);
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      margin-block-end: 1.35rem;
+    }
+
+    label, legend {
+      font-weight: 600;
+      font-size: 0.98rem;
+      color: var(--text);
+    }
+
+    .optional {
+      font-weight: 400;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .required-mark {
+      color: var(--danger);
+      font-weight: 700;
+      margin-inline-start: 0.15rem;
+    }
+
+    input[aria-invalid="true"],
+    input:user-invalid {
+      border-color: var(--danger);
+      background: var(--danger-soft);
+    }
+
+    .hint {
+      font-size: 0.86rem;
+      color: var(--muted);
+      margin: 0;
+    }
+
+    input[type="text"],
+    textarea {
+      width: 100%;
+      font: inherit;
+      font-size: max(1rem, 1em);
+      color: var(--text);
+      background: var(--surface);
+      border: 1.5px solid var(--border-strong);
+      border-radius: 10px;
+      padding: 0.72rem 0.85rem;
+      min-block-size: var(--target-size);
+    }
+
+    textarea {
+      resize: vertical;
+      min-block-size: 5.5rem;
+    }
+
+    input:focus-visible,
+    textarea:focus-visible,
+    button:focus-visible,
+    .picker-label:focus-within {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .visually-hidden {
+      position: absolute;
+      clip-path: inset(50%);
+      overflow: hidden;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      border: 0;
+      white-space: nowrap;
+    }
+
+    .hp-field {
+      position: absolute;
+      left: -9999px;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .picker-label {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 0.35rem;
+      min-block-size: 7.5rem;
+      padding: 1.25rem 1rem;
+      border: 2px dashed var(--accent);
+      border-radius: 12px;
+      background: var(--accent-soft);
+      color: var(--accent-hover);
+      cursor: pointer;
+      transition: background-color 0.15s, border-color 0.15s;
+    }
+
+    .picker-label:hover {
+      background: #dfe9e5;
+    }
+
+    .picker-title {
+      font-weight: 700;
+      font-size: 1.04rem;
+    }
+
+    .picker-sub {
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+
+    .file-list {
+      list-style: none;
+      margin: 0.85rem 0 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .file-item {
+      display: grid;
+      grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.55rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface-soft);
+    }
+
+    .file-thumb {
+      inline-size: 3.5rem;
+      block-size: 3.5rem;
+      border-radius: 8px;
+      object-fit: cover;
+      background: #dfd8cd;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--muted);
+      overflow: hidden;
+    }
+
+    .file-thumb img {
+      inline-size: 100%;
+      block-size: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .file-meta {
+      min-inline-size: 0;
+    }
+
+    .file-name {
+      font-size: 0.92rem;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+
+    .file-info {
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    .file-status {
+      font-size: 0.82rem;
+      font-weight: 600;
+      margin-block-start: 0.15rem;
+    }
+
+    .file-status.ok { color: var(--success); }
+    .file-status.err { color: var(--danger); }
+    .file-status.busy { color: var(--accent); }
+
+    .remove-btn {
+      min-inline-size: 44px;
+      min-block-size: 44px;
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 1.05rem;
+      cursor: pointer;
+    }
+
+    .remove-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .progress-box {
+      margin-block: 1.25rem;
+      padding: 0.95rem 1rem;
+      border-radius: 10px;
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+    }
+
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.5rem;
+      margin-block-end: 0.5rem;
+      font-size: 0.94rem;
+      font-weight: 600;
+    }
+
+    /* Custom styled native <progress> with separate browser pseudo-elements */
+    progress {
+      appearance: none;
+      border: 0 solid;
+      overflow: clip;
+      inline-size: 100%;
+      block-size: 0.75rem;
+      --progress-bar-radius: 1e5px;
+      border-radius: var(--progress-bar-radius);
+      background: #dfd8cd;
+      box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.1);
+    }
+
+    progress::-webkit-progress-bar {
+      background: transparent;
+    }
+
+    progress::-webkit-progress-value {
+      background: var(--accent);
+      border-radius: var(--progress-bar-radius);
+      transition: inline-size 0.25s;
+    }
+
+    progress::-moz-progress-bar {
+      background: var(--accent);
+      border-radius: var(--progress-bar-radius);
+      transition: inline-size 0.25s;
+    }
+
+    .submit-btn {
+      width: 100%;
+      min-block-size: 54px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--accent);
+      color: #ffffff;
+      font: inherit;
+      font-size: 1.05rem;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 0.85rem 1.25rem;
+      transition: background-color 0.15s;
+    }
+
+    .submit-btn:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+
+    .submit-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .secondary-btn {
+      width: 100%;
+      min-block-size: 48px;
+      margin-block-start: 0.75rem;
+      border: 1.5px solid var(--accent);
+      border-radius: 12px;
+      background: var(--surface);
+      color: var(--accent-hover);
+      font: inherit;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0.75rem 1.1rem;
+    }
+
+    .banner {
+      padding: 0.95rem 1rem;
+      border-radius: 10px;
+      margin-block-end: 1.1rem;
+      font-size: 0.94rem;
+    }
+
+    .banner.error {
+      background: var(--danger-soft);
+      border: 1px solid #e4b4b4;
+      color: #7c2424;
+    }
+
+    .banner.success {
+      background: var(--success-soft);
+      border: 1px solid #b3dac4;
+      color: #1f4b34;
+    }
+
+    footer {
+      text-align: center;
+      margin-block-start: 1.25rem;
+      color: var(--muted);
+      font-size: 0.84rem;
+      text-wrap: pretty;
+    }
+
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <header>
+      <p class="eyebrow">In Memory Of</p>
+      <h1>Marge</h1>
+      <p class="subtitle">
+        Share your favorite photos below.
+      </p>
+    </header>
+
+    <section class="card" aria-labelledby="form-heading">
+      <h2 id="form-heading" class="visually-hidden">Photo upload form</h2>
+
+      <div id="alertBox" class="banner error" role="alert" hidden></div>
+      <div id="successBox" class="banner success" role="status" aria-live="polite" hidden></div>
+
+      <form id="uploadForm" novalidate>
+        <div class="hp-field" aria-hidden="true">
+          <label for="website">Website</label>
+          <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
+        </div>
+
+        <div class="field">
+          <label for="uploaderName">Your Name<span class="required-mark" aria-hidden="true">*</span></label>
+          <input
+            type="text"
+            id="uploaderName"
+            name="uploaderName"
+            autocomplete="name"
+            required
+            maxlength="100"
+            enterkeyhint="next"
+            aria-describedby="name-hint"
+            placeholder="e.g., Ole Olsen or Aunt Lena">
+          <p id="name-hint" class="hint">So we know who shared each photo.</p>
+        </div>
+
+        <div class="field">
+          <label for="caption">Caption or Memory <span class="optional">(optional)</span></label>
+          <textarea
+            id="caption"
+            name="caption"
+            maxlength="800"
+            aria-describedby="caption-hint"
+            placeholder="Who's in the photo, or a short memory..."></textarea>
+          <p id="caption-hint" class="hint">Saved with all photos in this upload.</p>
+        </div>
+
+        <div class="field">
+          <label for="photoInput" class="picker-label" id="pickerLabel">
+            <span class="picker-title">Choose Photos</span>
+            <span class="picker-sub">Pick one or more photos (up to 20 MB each)</span>
+          </label>
+          <input
+            type="file"
+            id="photoInput"
+            name="photos"
+            accept="image/*"
+            multiple
+            class="visually-hidden">
+          <ul id="fileList" class="file-list" aria-label="Selected photos" hidden></ul>
+        </div>
+
+        <div id="progressBox" class="progress-box" hidden>
+          <div class="progress-label">
+            <span id="progressText" role="status" aria-live="polite">Starting upload...</span>
+            <span id="progressPct">0%</span>
+          </div>
+          <progress id="uploadProgress" max="100" value="0" aria-labelledby="progressText"></progress>
+        </div>
+
+        <button type="submit" id="submitBtn" class="submit-btn">Send Photos</button>
+        <button type="button" id="moreBtn" class="secondary-btn" hidden>Share More Photos</button>
+      </form>
+    </section>
+
+    <footer>
+      Sent privately to Seth and Kurt for approval before being shared on the Google Drive folder.
+    </footer>
+  </main>
+
+  <script>
+    (function() {
+      var EXEC_URL = "https://script.google.com/macros/s/AKfycbxseZvhbdF8cPl3ORVqIBz91zdQAOlRXivlxtdiA4w3GHxhKF5WJ43PVuZxne2i_tDP/exec";
+      var TOKEN = ((new URLSearchParams(window.location.search)).get("t") || "z4lrFiIu8HLYV8FM6GRF2Q");
+      var MAX_BYTES = 20 * 1024 * 1024;
+
+      var form = document.getElementById('uploadForm');
+      var nameInput = document.getElementById('uploaderName');
+      var photoInput = document.getElementById('photoInput');
+
+      try {
+        var savedName = localStorage.getItem('marge_uploader_name');
+        if (savedName && !nameInput.value) nameInput.value = savedName;
+      } catch (e) {}
+
+      nameInput.addEventListener('input', function() {
+        if (nameInput.value.trim()) {
+          nameInput.removeAttribute('aria-invalid');
+        }
+      });
+      var fileListEl = document.getElementById('fileList');
+      var submitBtn = document.getElementById('submitBtn');
+      var moreBtn = document.getElementById('moreBtn');
+      var alertBox = document.getElementById('alertBox');
+      var successBox = document.getElementById('successBox');
+      var progressBox = document.getElementById('progressBox');
+      var progressEl = document.getElementById('uploadProgress');
+      var progressText = document.getElementById('progressText');
+      var progressPct = document.getElementById('progressPct');
+
+      var queue = [];
+      var isUploading = false;
+
+      function formatSize(bytes) {
+        if (bytes < 1024 * 1024) return Math.max(1, Math.round(bytes / 1024)) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+      }
+
+      function showAlert(msg) {
+        alertBox.textContent = msg;
+        alertBox.hidden = false;
+      }
+
+      function clearAlert() {
+        alertBox.textContent = '';
+        alertBox.hidden = true;
+      }
+
+      function renderQueue() {
+        fileListEl.innerHTML = '';
+        if (queue.length === 0) {
+          fileListEl.hidden = true;
+          return;
+        }
+        fileListEl.hidden = false;
+
+        queue.forEach(function(item, idx) {
+          var li = document.createElement('li');
+          li.className = 'file-item';
+
+          var thumb = document.createElement('div');
+          thumb.className = 'file-thumb';
+          if (item.previewUrl && !item.previewFailed) {
+            var img = document.createElement('img');
+            img.src = item.previewUrl;
+            img.alt = '';
+            img.onerror = function() {
+              item.previewFailed = true;
+              thumb.textContent = (item.extLabel || 'IMG');
+            };
+            thumb.appendChild(img);
+          } else {
+            thumb.textContent = item.extLabel || 'IMG';
+          }
+
+          var meta = document.createElement('div');
+          meta.className = 'file-meta';
+
+          var nameEl = document.createElement('div');
+          nameEl.className = 'file-name';
+          nameEl.textContent = item.file.name;
+
+          var infoEl = document.createElement('div');
+          infoEl.className = 'file-info';
+          infoEl.textContent = formatSize(item.file.size);
+
+          meta.appendChild(nameEl);
+          meta.appendChild(infoEl);
+
+          if (item.statusText) {
+            var stEl = document.createElement('div');
+            stEl.className = 'file-status ' + (item.statusClass || '');
+            stEl.textContent = item.statusText;
+            meta.appendChild(stEl);
+          }
+
+          var removeBtn = document.createElement('button');
+          removeBtn.type = 'button';
+          removeBtn.className = 'remove-btn';
+          removeBtn.setAttribute('aria-label', 'Remove ' + item.file.name);
+          removeBtn.textContent = '✕';
+          removeBtn.disabled = isUploading || item.status === 'done';
+          removeBtn.addEventListener('click', function() {
+            if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+            queue.splice(idx, 1);
+            renderQueue();
+          });
+
+          li.appendChild(thumb);
+          li.appendChild(meta);
+          li.appendChild(removeBtn);
+          fileListEl.appendChild(li);
+        });
+      }
+
+      photoInput.addEventListener('change', function() {
+        clearAlert();
+        successBox.hidden = true;
+        moreBtn.hidden = true;
+
+        var files = Array.prototype.slice.call(photoInput.files || []);
+        var skippedLarge = 0;
+
+        files.forEach(function(file) {
+          var extMatch = (file.name || '').match(/\.([A-Za-z0-9]+)$/);
+          var extLabel = extMatch ? extMatch[1].toUpperCase().slice(0, 4) : 'IMG';
+          if (file.size > MAX_BYTES) {
+            skippedLarge++;
+            return;
+          }
+          var previewUrl = '';
+          if (extLabel !== 'HEIC' && extLabel !== 'HEIF') {
+            try { previewUrl = URL.createObjectURL(file); } catch (e) {}
+          }
+          queue.push({
+            file: file,
+            extLabel: extLabel,
+            previewUrl: previewUrl,
+            previewFailed: false,
+            status: 'ready',
+            statusText: '',
+            statusClass: ''
+          });
+        });
+
+        photoInput.value = '';
+        if (skippedLarge > 0) {
+          showAlert(skippedLarge + ' file(s) were skipped because they exceed the ' + Math.floor(MAX_BYTES / (1024 * 1024)) + ' MB per-photo limit.');
+        }
+        renderQueue();
+      });
+
+      function readFileAsBase64(file) {
+        return new Promise(function(resolve, reject) {
+          var reader = new FileReader();
+          reader.onload = function() {
+            var result = String(reader.result || '');
+            var comma = result.indexOf(',');
+            resolve(comma !== -1 ? result.slice(comma + 1) : result);
+          };
+          reader.onerror = function() {
+            reject(new Error('Could not read file from device.'));
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      function postUploadPayload(payload) {
+        // Primary path: cookie-free CORS-simple POST (text/plain avoids OPTIONS preflight
+        // and completely avoids iOS Safari third-party cookie / ITP issues).
+        if (EXEC_URL) {
+          return fetch(EXEC_URL, {
+            method: 'POST',
+            mode: 'cors',
+            credentials: 'omit',
+            redirect: 'follow',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+          }).then(function(res) {
+            return res.text();
+          }).then(function(txt) {
+            return JSON.parse(txt);
+          }).catch(function(fetchErr) {
+            // Fallback to google.script.run if available
+            if (window.google && google.script && google.script.run) {
+              return new Promise(function(resolve, reject) {
+                google.script.run
+                  .withSuccessHandler(resolve)
+                  .withFailureHandler(reject)
+                  .uploadPhotoRpc(payload);
+              });
+            }
+            throw fetchErr;
+          });
+        }
+
+        if (window.google && google.script && google.script.run) {
+          return new Promise(function(resolve, reject) {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              .uploadPhotoRpc(payload);
+          });
+        }
+        return Promise.reject(new Error('Upload endpoint unavailable.'));
+      }
+
+      moreBtn.addEventListener('click', function() {
+        queue.forEach(function(item) {
+          if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+        });
+        queue = [];
+        document.getElementById('caption').value = '';
+        successBox.hidden = true;
+        progressBox.hidden = true;
+        moreBtn.hidden = true;
+        clearAlert();
+        renderQueue();
+        document.getElementById('pickerLabel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+
+      form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        if (isUploading) return;
+        clearAlert();
+        successBox.hidden = true;
+
+        var uploaderName = nameInput.value.trim();
+        if (!uploaderName) {
+          nameInput.setAttribute('aria-invalid', 'true');
+          showAlert('Please enter your name first.');
+          nameInput.focus();
+          return;
+        }
+        nameInput.removeAttribute('aria-invalid');
+        try { localStorage.setItem('marge_uploader_name', uploaderName); } catch (e) {}
+
+        var pending = queue.filter(function(item) { return item.status !== 'done'; });
+        if (pending.length === 0) {
+          showAlert('Choose at least one photo first.');
+          document.getElementById('pickerLabel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+
+        var caption = document.getElementById('caption').value.trim();
+        var website = document.getElementById('website').value;
+
+        isUploading = true;
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Sending...';
+        progressBox.hidden = false;
+        progressEl.max = pending.length;
+        progressEl.value = 0;
+        progressPct.textContent = '0%';
+
+        var sentCount = 0;
+        var failedCount = 0;
+
+        for (var i = 0; i < pending.length; i++) {
+          var item = pending[i];
+          var num = i + 1;
+          progressText.textContent = 'Uploading ' + num + ' of ' + pending.length + '...';
+          item.status = 'uploading';
+          item.statusText = 'Uploading...';
+          item.statusClass = 'busy';
+          renderQueue();
+
+          try {
+            var base64 = await readFileAsBase64(item.file);
+            var resp = await postUploadPayload({
+              action: 'upload',
+              token: TOKEN,
+              website: website,
+              uploaderName: uploaderName,
+              caption: caption,
+              fileName: item.file.name,
+              mimeType: item.file.type || '',
+              dataBase64: base64
+            });
+
+            if (resp && resp.ok) {
+              item.status = 'done';
+              item.statusText = 'Sent ✓';
+              item.statusClass = 'ok';
+              sentCount++;
+            } else {
+              item.status = 'error';
+              item.statusText = (resp && resp.error) ? resp.error : 'Upload failed.';
+              item.statusClass = 'err';
+              failedCount++;
+            }
+          } catch (err) {
+            item.status = 'error';
+            item.statusText = 'Connection error. Tap Send Photos to try again.';
+            item.statusClass = 'err';
+            failedCount++;
+          }
+
+          progressEl.value = num;
+          progressPct.textContent = Math.round((num / pending.length) * 100) + '%';
+          renderQueue();
+        }
+
+        isUploading = false;
+        submitBtn.disabled = false;
+
+        if (failedCount === 0) {
+          progressText.textContent = 'Sent ' + sentCount + ' photo' + (sentCount === 1 ? '' : 's') + '.';
+          successBox.textContent = 'Thanks, ' + uploaderName + '! We got your ' + sentCount + ' photo' + (sentCount === 1 ? '' : 's') + '.';
+          successBox.hidden = false;
+          submitBtn.textContent = 'Send Photos';
+          moreBtn.hidden = false;
+        } else {
+          progressText.textContent = sentCount + ' sent, ' + failedCount + ' failed.';
+          showAlert(failedCount + ' photo(s) failed to upload. Tap Retry Failed Photos to try again.');
+          submitBtn.textContent = 'Retry Failed Photos';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
